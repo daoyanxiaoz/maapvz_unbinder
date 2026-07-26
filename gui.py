@@ -4,19 +4,18 @@ import threading
 import tkinter as tk
 from tkinter import messagebox, filedialog
 
-# ───────────────── ttkbootstrap 主题 ─────────────────
+# ────────────── 高级 UI 库 ──────────────
 try:
-    import ttkbootstrap as ttk
-    from ttkbootstrap.constants import *
-    THEME = "darkly"
-    USE_BOOTSTRAP = True
+    import customtkinter as ctk
+    ctk.set_appearance_mode("dark")                # 暗黑模式
+    ctk.set_default_color_theme("dark-blue")       # 深蓝色调
+    USE_CTK = True
 except ImportError:
-    import tkinter.ttk as ttk
-    THEME = None
-    USE_BOOTSTRAP = False
-    print("⚠️ ttkbootstrap 未安装，使用默认 Tkinter 样式。可通过 `pip install ttkbootstrap` 安装获得更好效果。")
+    import tkinter as ctk_fallback
+    USE_CTK = False
+    print("⚠️ customtkinter 未安装，使用默认 Tkinter 样式。可通过 `pip install customtkinter` 安装获得更好效果。")
 
-# ────────────── 拖拽支持（可选） ──────────────
+# ────────────── 拖拽支持 ──────────────
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
     DRAG_SUPPORT = True
@@ -24,10 +23,9 @@ except ImportError:
     DRAG_SUPPORT = False
     print("⚠️ tkinterdnd2 未安装，拖拽功能不可用。可通过 `pip install tkinterdnd2` 启用。")
 
-# 导入核心处理模块
 from auto_patch import process_apk, setup_java, resource_path
 
-# 初始化内嵌 Java 环境（auto_patch 模块已自动调用，但这里显式调用一次也无害）
+# 初始化内嵌 Java
 java_exe = setup_java()
 
 
@@ -48,9 +46,16 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("maapvz 免绑小助手")
-        self.root.geometry("700x600")
-        self.root.minsize(550, 450)
+        self.root.geometry("750x660")
+        self.root.minsize(650, 550)
 
+        # 半透明效果（Windows 下有效）
+        try:
+            self.root.attributes('-alpha', 0.97)
+        except:
+            pass
+
+        # 图标
         try:
             icon_path = resource_path("icon.ico")
             if os.path.exists(icon_path):
@@ -59,9 +64,18 @@ class App:
             pass
 
         self.apk_path = None
+        self.use_ctk = USE_CTK
+
+        # 发光动画控制变量
+        self._glow_step = 0
+        self._glow_colors = ["#3b3b3b", "#4a9eff", "#3b3b3b"]  # 暗 → 蓝 → 暗
+
         self.create_widgets()
         self.redirect_stdout()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        if DRAG_SUPPORT and self.use_ctk:
+            self.start_glow_animation()
 
     def on_close(self):
         sys.stdout = sys.__stdout__
@@ -69,80 +83,122 @@ class App:
         self.root.destroy()
 
     def create_widgets(self):
-        main = ttk.Frame(self.root, padding=15)
-        main.pack(fill=tk.BOTH, expand=True)
+        # 主容器（带圆角和内边距）
+        main = ctk.CTkFrame(self.root, corner_radius=15, fg_color="#1a1a1a") if self.use_ctk else tk.Frame(self.root, bg="#1a1a1a")
+        main.pack(fill="both", expand=True, padx=10, pady=10)
 
         # 标题
-        title_kwargs = {"font": ("Microsoft YaHei", 16, "bold")}
-        if USE_BOOTSTRAP:
-            title_kwargs["bootstyle"] = PRIMARY
-        title = ttk.Label(main, text="🌻 植物大战僵尸2 免绑小助手", **title_kwargs)
-        title.pack(pady=(0, 10))
+        title_font = ctk.CTkFont(family="Microsoft YaHei", size=20, weight="bold") if self.use_ctk else ("Microsoft YaHei", 20, "bold")
+        if self.use_ctk:
+            self.title_label = ctk.CTkLabel(main, text="植物大战僵尸2 免绑小助手", font=title_font, text_color="#4a9eff")
+        else:
+            self.title_label = tk.Label(main, text="植物大战僵尸2 免绑小助手", font=title_font, fg="#4a9eff", bg="#1a1a1a")
+        self.title_label.pack(pady=(15, 10))
 
-        # 拖拽区域
-        drop_kwargs = {"height": 120, "relief": "solid", "borderwidth": 1}
-        if USE_BOOTSTRAP:
-            drop_kwargs["bootstyle"] = "light"
-        self.drop_frame = ttk.Frame(main, **drop_kwargs)
-        self.drop_frame.pack(fill=tk.X, padx=5, pady=5)
-        self.drop_frame.pack_propagate(False)
+        # 拖拽区域（发光边框）
+        drop_frame = ctk.CTkFrame(main, corner_radius=10, border_width=2, fg_color="transparent", border_color="#3b3b3b") if self.use_ctk else tk.Frame(main, bg="#2b2b2b", relief="groove", bd=2)
+        drop_frame.pack(fill="x", padx=20, pady=10, ipady=35)
 
-        self.file_label = ttk.Label(
-            self.drop_frame,
+        self.file_label = ctk.CTkLabel(
+            drop_frame,
             text="📂 拖拽 APK 文件到此处\n或点击下方按钮选择文件",
-            anchor="center",
-            font=("Microsoft YaHei", 10),
-            justify="center"
-        )
+            font=ctk.CTkFont(family="Microsoft YaHei", size=12) if self.use_ctk else ("Microsoft YaHei", 12),
+            justify="center",
+            text_color="#aaaaaa" if self.use_ctk else "#aaaaaa"
+        ) if self.use_ctk else tk.Label(drop_frame, text="📂 拖拽 APK 文件到此处\n或点击下方按钮选择文件", font=("Microsoft YaHei", 12), fg="#aaaaaa", bg="#2b2b2b")
         self.file_label.pack(expand=True)
 
         if DRAG_SUPPORT:
-            self.drop_frame.drop_target_register(DND_FILES)
-            self.drop_frame.dnd_bind('<<Drop>>', self.on_drop)
+            if self.use_ctk:
+                drop_frame.drop_target_register(DND_FILES)
+                drop_frame.dnd_bind('<<Drop>>', self.on_drop)
+            else:
+                self.root.drop_target_register(DND_FILES)
+                self.root.dnd_bind('<<Drop>>', self.on_drop)
 
         # 按钮行
-        btn_frame = ttk.Frame(main)
-        btn_frame.pack(pady=10)
+        btn_frame = ctk.CTkFrame(main, fg_color="transparent") if self.use_ctk else tk.Frame(main, bg="#1a1a1a")
+        btn_frame.pack(pady=15)
 
-        choose_kwargs = {"text": "📁 选择 APK", "command": self.choose_file}
-        if USE_BOOTSTRAP:
-            choose_kwargs["bootstyle"] = "info-outline"
-        self.choose_btn = ttk.Button(btn_frame, **choose_kwargs)
-        self.choose_btn.pack(side=tk.LEFT, padx=5)
+        choose_btn = ctk.CTkButton(
+            btn_frame,
+            text="📁 选择 APK",
+            command=self.choose_file,
+            width=160,
+            height=40,
+            corner_radius=8,
+            fg_color="#2b5b84",
+            hover_color="#1e405e",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ) if self.use_ctk else tk.Button(btn_frame, text="📁 选择 APK", command=self.choose_file, width=15)
+        choose_btn.pack(side="left", padx=10)
 
-        start_kwargs = {"text": "🚀 开始免绑", "command": self.start_process, "state": "disabled"}
-        if USE_BOOTSTRAP:
-            start_kwargs["bootstyle"] = "success"
-        self.start_btn = ttk.Button(btn_frame, **start_kwargs)
-        self.start_btn.pack(side=tk.LEFT, padx=5)
+        self.start_btn = ctk.CTkButton(
+            btn_frame,
+            text="🚀 开始免绑",
+            command=self.start_process,
+            state="disabled",
+            width=160,
+            height=40,
+            corner_radius=8,
+            fg_color="#2b7a4b",
+            hover_color="#1e5a37",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ) if self.use_ctk else tk.Button(btn_frame, text="🚀 开始免绑", command=self.start_process, state="disabled", width=15)
+        self.start_btn.pack(side="left", padx=10)
 
         # 进度条
-        progress_kwargs = {"mode": "indeterminate"}
-        if USE_BOOTSTRAP:
-            progress_kwargs["bootstyle"] = "info-striped"
-        self.progress = ttk.Progressbar(main, **progress_kwargs)
+        self.progress = ctk.CTkProgressBar(main, height=8, corner_radius=4, progress_color="#4a9eff") if self.use_ctk else tk.ttk.Progressbar(main, mode="indeterminate")
+        self.progress.pack_forget()  # 初始隐藏
 
         # 日志区域
-        log_frame = ttk.Frame(main)
-        log_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        log_frame = ctk.CTkFrame(main, corner_radius=10, fg_color="#1e1e1e") if self.use_ctk else tk.Frame(main, bg="#1e1e1e")
+        log_frame.pack(fill="both", expand=True, padx=20, pady=(15, 10))
 
-        self.log_text = tk.Text(
-            log_frame,
-            wrap="word",
-            height=10,
-            font=("Consolas", 9),
-            bg="#2b2b2b",
-            fg="#dcdcdc",
-            insertbackground="white",
-            relief="flat",
-            borderwidth=0,
-            padx=5,
-            pady=5
-        )
-        scrollbar = ttk.Scrollbar(log_frame, command=self.log_text.yview)
-        self.log_text.configure(yscrollcommand=scrollbar.set)
-        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        if self.use_ctk:
+            self.log_text = ctk.CTkTextbox(
+                log_frame,
+                font=("Consolas", 11),
+                fg_color="#1e1e1e",
+                text_color="#dcdcdc",
+                corner_radius=8,
+                wrap="word"
+            )
+        else:
+            self.log_text = tk.Text(
+                log_frame,
+                wrap="word",
+                height=10,
+                font=("Consolas", 11),
+                bg="#1e1e1e",
+                fg="#dcdcdc",
+                insertbackground="white",
+                relief="flat",
+                borderwidth=0,
+                padx=15,
+                pady=15
+            )
+        self.log_text.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # 状态栏
+        status_text = f"v2.0 | Java: {'内嵌' if java_exe != 'java' else '系统'}"
+        if self.use_ctk:
+            self.status_label = ctk.CTkLabel(main, text=status_text, font=("Microsoft YaHei", 10), text_color="#888888")
+        else:
+            self.status_label = tk.Label(main, text=status_text, font=("Microsoft YaHei", 10), fg="#888888", bg="#1a1a1a")
+        self.status_label.pack(anchor="e", padx=20, pady=(0, 10))
+
+    def start_glow_animation(self):
+        """拖拽区域边框缓慢变色动画"""
+        def animate():
+            color = self._glow_colors[self._glow_step % len(self._glow_colors)]
+            try:
+                self.drop_frame.configure(border_color=color)
+            except:
+                pass
+            self._glow_step += 1
+            self.root.after(2000, animate)  # 每2秒切换
+        animate()
 
     def redirect_stdout(self):
         sys.stdout = RedirectText(self.log_text)
@@ -154,8 +210,8 @@ class App:
             path = files[0].strip('{}')
             if path.lower().endswith('.apk'):
                 self.apk_path = path
-                self.file_label.config(text=f"📦 已选择:\n{os.path.basename(path)}")
-                self.start_btn.config(state="normal")
+                self.file_label.configure(text=f"📦 已选择:\n{os.path.basename(path)}")
+                self.start_btn.configure(state="normal")
             else:
                 messagebox.showerror("错误", "请拖入 .apk 文件")
 
@@ -166,17 +222,17 @@ class App:
         )
         if path:
             self.apk_path = path
-            self.file_label.config(text=f"📦 已选择:\n{os.path.basename(path)}")
-            self.start_btn.config(state="normal")
+            self.file_label.configure(text=f"📦 已选择:\n{os.path.basename(path)}")
+            self.start_btn.configure(state="normal")
 
     def start_process(self):
         if not self.apk_path:
             return
-        self.start_btn.config(state="disabled")
-        self.choose_btn.config(state="disabled")
-        self.log_text.delete(1.0, tk.END)
-        self.progress.pack(fill=tk.X, padx=5, pady=5)
-        self.progress.start(10)
+        self.start_btn.configure(state="disabled")
+        self.choose_btn.configure(state="disabled")
+        self.log_text.delete("1.0", "end")
+        self.progress.pack(fill="x", padx=20, pady=5)
+        self.progress.start()
         print(f"开始处理: {self.apk_path}\n")
         threading.Thread(target=self.run_process, daemon=True).start()
 
@@ -187,7 +243,7 @@ class App:
             self.root.after(0, lambda: messagebox.showinfo(
                 "成功", f"免绑包已生成:\n{result}\n\n可以关闭本窗口或继续处理其他APK。"))
         except Exception as ex:
-            error_msg = str(ex)   # 避免作用域问题
+            error_msg = str(ex)
             print(f"\n❌ 处理失败: {error_msg}")
             self.root.after(0, lambda: messagebox.showerror("错误", error_msg))
         finally:
@@ -196,17 +252,17 @@ class App:
     def reset_ui(self):
         self.progress.stop()
         self.progress.pack_forget()
-        self.start_btn.config(state="normal")
-        self.choose_btn.config(state="normal")
-        self.file_label.config(text="📂 拖拽 APK 文件到此处\n或点击下方按钮选择文件")
+        self.start_btn.configure(state="normal")
+        self.choose_btn.configure(state="normal")
+        self.file_label.configure(text="📂 拖拽 APK 文件到此处\n或点击下方按钮选择文件")
         self.apk_path = None
 
 
 if __name__ == "__main__":
     if DRAG_SUPPORT:
         root = TkinterDnD.Tk()
-    elif USE_BOOTSTRAP:
-        root = ttk.Window(themename=THEME)
+    elif USE_CTK:
+        root = ctk.CTk()
     else:
         root = tk.Tk()
 
