@@ -1,0 +1,124 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    # 当推送到 main 分支时触发，由 commit 消息决定是否发版
+    tags:
+      - 'v*'          # 如果手动推送标签也会触发（保留备用）
+  workflow_dispatch:   # 允许手动运行
+
+env:
+  EXE_NAME: maapvz_免绑小助手.exe
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.set_tag.outputs.tag }}
+      is_release: ${{ steps.set_tag.outputs.is_release }}
+      version_body: ${{ steps.set_tag.outputs.version_body }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: set_tag
+        shell: bash
+        run: |
+          is_release=false
+          tag=""
+          version_body=""
+
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            FIRST_LINE=$(echo "${{ github.event.head_commit.message }}" | head -n1)
+            # 提取类似 "v1.0.0" 的版本号（支持预发布标识）
+            if [[ "$FIRST_LINE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+              VERSION=$(echo "$FIRST_LINE" | grep -oE '^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?')
+              if [ -n "$VERSION" ]; then
+                is_release=true
+                tag="$VERSION"
+                # 将 commit 消息中版本号后面的内容作为发布说明（可选）
+                version_body=$(echo "$FIRST_LINE" | sed "s/^$VERSION *//")
+                if [ -z "$version_body" ]; then
+                  version_body="自动发布 $VERSION"
+                fi
+              fi
+            fi
+          fi
+
+          if [ -z "$tag" ]; then
+            # 没有版本号则只做构建，不发版，用 ci 标签
+            tag="ci-$(date +%y%m%d-%H%M)"
+          fi
+
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "is_release=$is_release" >> $GITHUB_OUTPUT
+          echo "version_body=$version_body" >> $GITHUB_OUTPUT
+
+  create_tag:
+    needs: meta
+    if: ${{ needs.meta.outputs.is_release == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create and push tag
+        run: |
+          TAG="${{ needs.meta.outputs.tag }}"
+          if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
+            echo "Tag ${TAG} already exists, skipping."
+          else
+            git tag "${TAG}"
+            git push origin "${TAG}"
+            echo "Tag ${TAG} created and pushed."
+          fi
+
+  build:
+    needs: meta
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x86_64]   # 仅 64 位，如需要 arm 可扩展
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --add-data "apktool.jar;." --add-data "apksigner.jar;." --add-data "mykey.keystore;." --add-data "patch_files;patch_files" --add-data "jre;jre" --name "maapvz_免绑小助手" auto_patch.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.EXE_NAME }}
+          path: dist/${{ env.EXE_NAME }}
+
+  release:
+    if: ${{ needs.meta.outputs.is_release == 'true' }}
+    needs: [meta, build, create_tag]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.EXE_NAME }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.EXE_NAME }}
+          tag_name: ${{ needs.meta.outputs.tag }}
+          body: ${{ needs.meta.outputs.version_body }}
+          draft: false
+          prerelease: ${{ contains(needs.meta.outputs.tag, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
