@@ -280,54 +280,65 @@ def clean_temp_files():
             except Exception as e:
                 print(f"[警告] 清理 {item} 失败: {e}")
 
+# ================== GUI 调用的核心函数 ==================
+def process_apk(apk_path):
+    """供外部调用的处理函数，返回生成的免绑包路径"""
+    import tempfile
+    original_dir = os.getcwd()
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        os.chdir(tmp_dir)
+        input_apk = os.path.join(tmp_dir, "input.apk")
+        shutil.copy2(apk_path, input_apk)
+
+        print(f"📦 待处理文件: {input_apk}")
+        if os.path.exists(UNPACK_DIR):
+            shutil.rmtree(UNPACK_DIR)
+        run_cmd(f'java -jar "{APKTOOL}" d -f "{input_apk}" -o "{UNPACK_DIR}"')
+
+        package, app_class = get_app_class()
+        if not app_class:
+            app_class = "android.app.Application"
+            print("[*] 未定义自定义 Application，将使用默认类。")
+        print(f"包名: {package}")
+        print(f"Application: {app_class}")
+        check_unsupported(package, app_class)
+
+        apply_patches()
+        clean_original_meta()
+        patch_libsrc()
+        lower_target_sdk()
+        inject_init(app_class)
+
+        if os.path.exists(UNSIGNED_APK):
+            os.remove(UNSIGNED_APK)
+        run_cmd(f'java -jar "{APKTOOL}" b "{UNPACK_DIR}" -o "{UNSIGNED_APK}"')
+
+        signed_apk = "免绑包.apk"
+        if os.path.exists(signed_apk):
+            os.remove(signed_apk)
+        run_cmd(
+            f'java -jar "{APKSIGNER}" sign --ks "{KEYSTORE}" '
+            f'--ks-pass pass:{KEY_PASS} --ks-key-alias {KEY_ALIAS} '
+            f'--out "{signed_apk}" "{UNSIGNED_APK}"'
+        )
+
+        clean_temp_files()
+
+        result_path = os.path.join(original_dir, signed_apk)
+        if os.path.exists(result_path):
+            os.remove(result_path)
+        shutil.move(os.path.join(tmp_dir, signed_apk), result_path)
+        print(f"📱 最终安装包: {result_path}")
+        return result_path
+    finally:
+        os.chdir(original_dir)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+# ================== 命令行入口 ==================
 def main():
     input_apk = get_input_apk()
-    print(f"📦 待处理文件: {input_apk}")
-
-    print("[1/5] 解包...")
-    if os.path.exists(UNPACK_DIR):
-        shutil.rmtree(UNPACK_DIR)
-    try:
-        run_cmd(f'java -jar "{APKTOOL}" d -f "{input_apk}" -o "{UNPACK_DIR}"')
-    except subprocess.CalledProcessError:
-        sys.exit("❌ 解包失败，可能不是有效的安卓 APK 文件（或文件已损坏）。")
-
-    package, app_class = get_app_class()
-    if not app_class:
-        app_class = "android.app.Application"
-        print("[*] 未定义自定义 Application，将使用默认类。")
-    print(f"包名: {package}")
-    print(f"Application: {app_class}")
-
-    check_unsupported(package, app_class)
-
-    print("[2/5] 应用通用补丁...")
-    apply_patches()
-    clean_original_meta()
-    patch_libsrc()
-    lower_target_sdk()
-
-    print("[3/5] 检测 Application 并注入...")
-    inject_init(app_class)
-
-    print("[4/5] 重打包...")
-    if os.path.exists(UNSIGNED_APK):
-        os.remove(UNSIGNED_APK)
-    run_cmd(f'java -jar "{APKTOOL}" b "{UNPACK_DIR}" -o "{UNSIGNED_APK}"')
-
-    signed_apk = "免绑包.apk"
-    print(f"[5/5] 签名 → {signed_apk} ...")
-    if os.path.exists(signed_apk):
-        os.remove(signed_apk)
-    run_cmd(
-        f'java -jar "{APKSIGNER}" sign --ks "{KEYSTORE}" '
-        f'--ks-pass pass:{KEY_PASS} --ks-key-alias {KEY_ALIAS} '
-        f'--out "{signed_apk}" "{UNSIGNED_APK}"'
-    )
-
-    print("\n✅ 签名完成！正在清理临时文件...")
-    clean_temp_files()
-    print(f"📱 最终安装包: {signed_apk}")
+    process_apk(input_apk)
 
 if __name__ == "__main__":
     java_exe = setup_java()
