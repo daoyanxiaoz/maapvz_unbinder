@@ -7,8 +7,8 @@ from tkinter import messagebox, filedialog
 # ────────────── 高级 UI 库 ──────────────
 try:
     import customtkinter as ctk
-    ctk.set_appearance_mode("dark")                # 暗黑模式
-    ctk.set_default_color_theme("dark-blue")       # 深蓝色调
+    ctk.set_appearance_mode("dark")
+    ctk.set_default_color_theme("dark-blue")
     USE_CTK = True
 except ImportError:
     import tkinter as ctk_fallback
@@ -49,7 +49,7 @@ class App:
         self.root.geometry("750x660")
         self.root.minsize(650, 550)
 
-        # 半透明效果（Windows 下有效）
+        # 半透明效果
         try:
             self.root.attributes('-alpha', 0.97)
         except:
@@ -66,9 +66,9 @@ class App:
         self.apk_path = None
         self.use_ctk = USE_CTK
 
-        # 发光动画控制变量
+        # 发光动画控制
         self._glow_step = 0
-        self._glow_colors = ["#3b3b3b", "#4a9eff", "#3b3b3b"]  # 暗 → 蓝 → 暗
+        self._glow_colors = ["#3b3b3b", "#4a9eff", "#3b3b3b"]
 
         self.create_widgets()
         self.redirect_stdout()
@@ -83,35 +83,35 @@ class App:
         self.root.destroy()
 
     def create_widgets(self):
-        # 主容器（带圆角和内边距）
+        # 主容器
         main = ctk.CTkFrame(self.root, corner_radius=15, fg_color="#1a1a1a") if self.use_ctk else tk.Frame(self.root, bg="#1a1a1a")
         main.pack(fill="both", expand=True, padx=10, pady=10)
 
         # 标题
         title_font = ctk.CTkFont(family="Microsoft YaHei", size=20, weight="bold") if self.use_ctk else ("Microsoft YaHei", 20, "bold")
         if self.use_ctk:
-            self.title_label = ctk.CTkLabel(main, text="植物大战僵尸2 免绑小助手", font=title_font, text_color="#4a9eff")
+            self.title_label = ctk.CTkLabel(main, text="🌻 植物大战僵尸2 免绑小助手", font=title_font, text_color="#4a9eff")
         else:
-            self.title_label = tk.Label(main, text="植物大战僵尸2 免绑小助手", font=title_font, fg="#4a9eff", bg="#1a1a1a")
+            self.title_label = tk.Label(main, text="🌻 植物大战僵尸2 免绑小助手", font=title_font, fg="#4a9eff", bg="#1a1a1a")
         self.title_label.pack(pady=(15, 10))
 
-        # 拖拽区域（发光边框）
-        drop_frame = ctk.CTkFrame(main, corner_radius=10, border_width=2, fg_color="transparent", border_color="#3b3b3b") if self.use_ctk else tk.Frame(main, bg="#2b2b2b", relief="groove", bd=2)
-        drop_frame.pack(fill="x", padx=20, pady=10, ipady=35)
+        # 拖拽区域
+        self.drop_frame = ctk.CTkFrame(main, corner_radius=10, border_width=2, fg_color="transparent", border_color="#3b3b3b") if self.use_ctk else tk.Frame(main, bg="#2b2b2b", relief="groove", bd=2)
+        self.drop_frame.pack(fill="x", padx=20, pady=10, ipady=35)
 
         self.file_label = ctk.CTkLabel(
-            drop_frame,
+            self.drop_frame,
             text="📂 拖拽 APK 文件到此处\n或点击下方按钮选择文件",
             font=ctk.CTkFont(family="Microsoft YaHei", size=12) if self.use_ctk else ("Microsoft YaHei", 12),
             justify="center",
-            text_color="#aaaaaa" if self.use_ctk else "#aaaaaa"
-        ) if self.use_ctk else tk.Label(drop_frame, text="📂 拖拽 APK 文件到此处\n或点击下方按钮选择文件", font=("Microsoft YaHei", 12), fg="#aaaaaa", bg="#2b2b2b")
+            text_color="#aaaaaa"
+        ) if self.use_ctk else tk.Label(self.drop_frame, text="📂 拖拽 APK 文件到此处\n或点击下方按钮选择文件", font=("Microsoft YaHei", 12), fg="#aaaaaa", bg="#2b2b2b")
         self.file_label.pack(expand=True)
 
         if DRAG_SUPPORT:
             if self.use_ctk:
-                drop_frame.drop_target_register(DND_FILES)
-                drop_frame.dnd_bind('<<Drop>>', self.on_drop)
+                self.drop_frame.drop_target_register(DND_FILES)
+                self.drop_frame.dnd_bind('<<Drop>>', self.on_drop)
             else:
                 self.root.drop_target_register(DND_FILES)
                 self.root.dnd_bind('<<Drop>>', self.on_drop)
@@ -120,7 +120,8 @@ class App:
         btn_frame = ctk.CTkFrame(main, fg_color="transparent") if self.use_ctk else tk.Frame(main, bg="#1a1a1a")
         btn_frame.pack(pady=15)
 
-        choose_btn = ctk.CTkButton(
+        # 选择按钮
+        self.choose_btn = ctk.CTkButton(
             btn_frame,
             text="📁 选择 APK",
             command=self.choose_file,
@@ -131,8 +132,9 @@ class App:
             hover_color="#1e405e",
             font=ctk.CTkFont(size=14, weight="bold")
         ) if self.use_ctk else tk.Button(btn_frame, text="📁 选择 APK", command=self.choose_file, width=15)
-        choose_btn.pack(side="left", padx=10)
+        self.choose_btn.pack(side="left", padx=10)
 
+        # 开始按钮
         self.start_btn = ctk.CTkButton(
             btn_frame,
             text="🚀 开始免绑",
@@ -149,7 +151,7 @@ class App:
 
         # 进度条
         self.progress = ctk.CTkProgressBar(main, height=8, corner_radius=4, progress_color="#4a9eff") if self.use_ctk else tk.ttk.Progressbar(main, mode="indeterminate")
-        self.progress.pack_forget()  # 初始隐藏
+        self.progress.pack_forget()
 
         # 日志区域
         log_frame = ctk.CTkFrame(main, corner_radius=10, fg_color="#1e1e1e") if self.use_ctk else tk.Frame(main, bg="#1e1e1e")
@@ -189,7 +191,6 @@ class App:
         self.status_label.pack(anchor="e", padx=20, pady=(0, 10))
 
     def start_glow_animation(self):
-        """拖拽区域边框缓慢变色动画"""
         def animate():
             color = self._glow_colors[self._glow_step % len(self._glow_colors)]
             try:
@@ -197,7 +198,7 @@ class App:
             except:
                 pass
             self._glow_step += 1
-            self.root.after(2000, animate)  # 每2秒切换
+            self.root.after(2000, animate)
         animate()
 
     def redirect_stdout(self):
