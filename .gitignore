@@ -1,0 +1,12 @@
+﻿__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+*.spec
+temp_unpack/
+output_unsigned.apk
+免绑包.apk
+*.idsig
+.vscode/
+.idea/
