@@ -27,7 +27,7 @@ except ImportError:
 # 导入核心处理模块
 from auto_patch import process_apk, setup_java, resource_path
 
-# 初始化内嵌 Java 环境
+# 初始化内嵌 Java 环境（auto_patch 模块已自动调用，但这里显式调用一次也无害）
 java_exe = setup_java()
 
 
@@ -186,9 +186,10 @@ class App:
             print(f"\n✅ 免绑成功！\n输出文件: {result}")
             self.root.after(0, lambda: messagebox.showinfo(
                 "成功", f"免绑包已生成:\n{result}\n\n可以关闭本窗口或继续处理其他APK。"))
-        except Exception as e:
-            print(f"\n❌ 处理失败: {e}")
-            self.root.after(0, lambda: messagebox.showerror("错误", str(e)))
+        except Exception as ex:
+            error_msg = str(ex)   # 避免作用域问题
+            print(f"\n❌ 处理失败: {error_msg}")
+            self.root.after(0, lambda: messagebox.showerror("错误", error_msg))
         finally:
             self.root.after(0, self.reset_ui)
 

@@ -24,6 +24,9 @@ def setup_java():
         return os.path.join(java_bin, "java.exe")
     return "java"
 
+# 模块级别初始化 Java 路径，确保无论命令行还是 GUI 导入都可使用
+java_exe = setup_java()
+
 # ---------- 配置 ----------
 APKTOOL = resource_path("apktool.jar")
 APKSIGNER = resource_path("apksigner.jar")
@@ -283,6 +286,7 @@ def clean_temp_files():
 # ================== GUI 调用的核心函数 ==================
 def process_apk(apk_path):
     """供外部调用的处理函数，返回生成的免绑包路径"""
+    global java_exe   # 确保使用模块级别的 java_exe
     import tempfile
     original_dir = os.getcwd()
     tmp_dir = tempfile.mkdtemp()
@@ -341,5 +345,4 @@ def main():
     process_apk(input_apk)
 
 if __name__ == "__main__":
-    java_exe = setup_java()
     main()
