@@ -111,7 +111,7 @@ jobs:
     needs: [meta, build, create_tag]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4   # 检出代码，获取“使用方法.txt”
+      - uses: actions/checkout@v4
 
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -125,13 +125,13 @@ jobs:
           cp release-files/${{ env.EXE_NAME }} release-pkg/
           cp 使用方法.txt release-pkg/
           cd release-pkg
-          zip -r ../maapvz_免绑小助手_${{ needs.meta.outputs.tag }}.zip .
+          zip -r ../maapvz_免绑小助手.zip .
           cd ..
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: maapvz_免绑小助手_${{ needs.meta.outputs.tag }}.zip
+          files: maapvz_免绑小助手.zip
           tag_name: ${{ needs.meta.outputs.tag }}
           body: ${{ needs.meta.outputs.version_body }}
           draft: false
