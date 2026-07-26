@@ -28,7 +28,6 @@ jobs:
           is_release=false
           tag=""
           version_body=""
-
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
             FIRST_LINE=$(echo "${{ github.event.head_commit.message }}" | head -n1)
             if [[ "$FIRST_LINE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
@@ -43,11 +42,9 @@ jobs:
               fi
             fi
           fi
-
           if [ -z "$tag" ]; then
             tag="ci-$(date +%y%m%d-%H%M)"
           fi
-
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "is_release=$is_release" >> $GITHUB_OUTPUT
           echo "version_body=$version_body" >> $GITHUB_OUTPUT
@@ -61,12 +58,10 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Set up Git user
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
       - name: Create and push tag
         run: |
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
@@ -93,12 +88,22 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install PyInstaller
-        run: pip install pyinstaller
-
-      - name: Build executable
+      - name: Install PyInstaller and GUI dependencies
         run: |
-          pyinstaller --onefile --add-data "apktool.jar;." --add-data "apksigner.jar;." --add-data "mykey.keystore;." --add-data "patch_files;patch_files" --add-data "jre;jre" --name "maapvz_免绑小助手" auto_patch.py
+          pip install pyinstaller ttkbootstrap tkinterdnd2
+
+      - name: Build executable (GUI version)
+        run: |
+          pyinstaller --onefile `
+            --add-data "apktool.jar;." `
+            --add-data "apksigner.jar;." `
+            --add-data "mykey.keystore;." `
+            --add-data "patch_files;patch_files" `
+            --add-data "jre;jre" `
+            --add-data "auto_patch.py;." `
+            --add-data "使用方法.txt;." `
+            --name "maapvz_免绑小助手" `
+            gui.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -113,7 +118,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0          # 获取全部历史记录和标签
+          fetch-depth: 0
 
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -125,22 +130,14 @@ jobs:
         id: changelog
         run: |
           TAG="${{ needs.meta.outputs.tag }}"
-          # 获取上一个标签（排除当前标签）
           PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${TAG}$" | head -1 || true)
-          echo "当前版本: $TAG"
-          echo "上一版本: $PREV_TAG"
-
           if [ -z "$PREV_TAG" ]; then
-            # 没有历史标签，列出到当前标签的所有提交
             LOG=$(git log --pretty=format:"* %s (%h)" ${TAG})
           else
             LOG=$(git log --pretty=format:"* %s (%h)" ${PREV_TAG}..${TAG})
           fi
-
-          # 组装完整的 Release 说明
           BODY="## $TAG"$'\n\n'"$LOG"$'\n\n'"---"$'\n'"${{ needs.meta.outputs.version_body }}"
           echo "$BODY" > changelog.md
-          # 将多行内容输出到 $GITHUB_OUTPUT
           {
             echo 'content<<CHANGELOG_EOF'
             cat changelog.md
@@ -153,13 +150,13 @@ jobs:
           cp release-files/${{ env.EXE_NAME }} release-pkg/
           cp 使用方法.txt release-pkg/
           cd release-pkg
-          zip -r ../maapvz_免绑小助手.zip .
+          zip -r ../maapvz_unbinder.zip .
           cd ..
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: maapvz_免绑小助手.zip
+          files: maapvz_unbinder.zip
           tag_name: ${{ needs.meta.outputs.tag }}
           body: ${{ steps.changelog.outputs.content }}
           draft: false
