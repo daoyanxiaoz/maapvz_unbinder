@@ -90,11 +90,15 @@ jobs:
 
       - name: Install PyInstaller and GUI dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install pyinstaller ttkbootstrap tkinterdnd2
 
-      - name: Build executable (GUI version)
+      - name: Build executable (console version for debugging)
+        shell: pwsh
         run: |
-          pyinstaller --onefile `
+          $ttkPath = python -c "import ttkbootstrap; print(ttkbootstrap.__path__[0])"
+          Write-Host "ttkbootstrap assets path: $ttkPath\assets"
+          pyinstaller --onefile --console `
             --add-data "apktool.jar;." `
             --add-data "apksigner.jar;." `
             --add-data "mykey.keystore;." `
@@ -102,10 +106,17 @@ jobs:
             --add-data "jre;jre" `
             --add-data "auto_patch.py;." `
             --add-data "使用方法.txt;." `
+            --add-data "$ttkPath\assets;ttkbootstrap\assets" `
+            --collect-all ttkbootstrap `
+            --collect-all tkinterdnd2 `
+            --hidden-import auto_patch `
+            --hidden-import tkinter `
+            --hidden-import tkinter.ttk `
+            --hidden-import tkinterdnd2 `
             --name "maapvz_免绑小助手" `
             gui.py
 
-      - name: Upload artifact
+      - name: Upload artifact (console version)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.EXE_NAME }}
