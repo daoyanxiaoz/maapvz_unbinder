@@ -235,11 +235,12 @@ def lower_target_sdk():
     with open(manifest_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 确保 <manifest> 标签有 xmlns:android 声明（避免前缀未绑定错误）
-    if 'xmlns:android="http://schemas.android.com/apk/res/android"' not in content.splitlines()[0]:
+    # 如果 manifest 标签中还没有 xmlns:android，则补充（避免重复添加）
+    manifest_match = re.search(r'<manifest[^>]*>', content)
+    if manifest_match and 'xmlns:android' not in manifest_match.group(0):
         content = re.sub(
-            r'(<manifest\b)',
-            r'\1 xmlns:android="http://schemas.android.com/apk/res/android"',
+            r'<manifest\b',
+            '<manifest xmlns:android="http://schemas.android.com/apk/res/android"',
             content,
             count=1
         )
