@@ -97,8 +97,8 @@ jobs:
           move adb_tools\platform-tools\adb.exe .
           move adb_tools\platform-tools\AdbWinApi.dll .
           move adb_tools\platform-tools\AdbWinUsbApi.dll .
-          rm platform-tools.zip
-          rmdir /s /q adb_tools
+          Remove-Item platform-tools.zip
+          Remove-Item -Recurse -Force adb_tools
 
       - name: Build executable
         run: |
