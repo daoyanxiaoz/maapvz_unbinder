@@ -94,24 +94,27 @@ jobs:
           pip install pyinstaller customtkinter tkinterdnd2
 
       - name: Build executable (console version for debugging)
-        shell: pwsh
-        run: |
-          pyinstaller --onefile --console `
-            --add-data "apktool.jar;." `
-            --add-data "apksigner.jar;." `
-            --add-data "mykey.keystore;." `
-            --add-data "patch_files;patch_files" `
-            --add-data "jre;jre" `
-            --add-data "auto_patch.py;." `
-            --add-data "使用方法.txt;." `
-            --collect-all customtkinter `
-            --collect-all tkinterdnd2 `
-            --hidden-import auto_patch `
-            --hidden-import tkinter `
-            --hidden-import tkinter.ttk `
-            --hidden-import customtkinter `
-            --name "maapvz_免绑小助手" `
-            gui.py
+  shell: pwsh
+  run: |
+    pyinstaller --onefile --console `
+      --add-data "apktool.jar;." `
+      --add-data "apksigner.jar;." `
+      --add-data "mykey.keystore;." `
+      --add-data "patch_files;patch_files" `
+      --add-data "jre;jre" `
+      --add-data "auto_patch.py;." `
+      --add-data "使用方法.txt;." `
+      --add-data "adb.exe;." `
+      --add-data "AdbWinApi.dll;." `
+      --add-data "AdbWinUsbApi.dll;." `
+      --collect-all customtkinter `
+      --collect-all tkinterdnd2 `
+      --hidden-import auto_patch `
+      --hidden-import tkinter `
+      --hidden-import tkinter.ttk `
+      --hidden-import customtkinter `
+      --name "maapvz_免绑小助手" `
+      gui.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

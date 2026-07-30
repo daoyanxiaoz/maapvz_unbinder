@@ -7,7 +7,6 @@ import glob
 import re
 
 def resource_path(relative_path):
-    """获取资源文件的绝对路径，兼容开发环境和 PyInstaller 打包"""
     if getattr(sys, 'frozen', False):
         base_path = sys._MEIPASS
     else:
@@ -15,7 +14,6 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def setup_java():
-    """设置内嵌 JRE 路径（打包后使用），返回 java.exe 的完整路径"""
     if getattr(sys, 'frozen', False):
         java_dir = resource_path("jre")
         java_bin = os.path.join(java_dir, "bin")
@@ -24,7 +22,6 @@ def setup_java():
         return os.path.join(java_bin, "java.exe")
     return "java"
 
-# 模块级别初始化 Java 路径，确保无论命令行还是 GUI 导入都可使用
 java_exe = setup_java()
 
 # ---------- 配置 ----------
@@ -36,8 +33,8 @@ KEY_ALIAS = "myalias"
 UNPACK_DIR = "temp_unpack"
 UNSIGNED_APK = "output_unsigned.apk"
 LOCAL_APK = "game.apk"
+ADB_EXE = resource_path("adb.exe")
 
-# SO 补丁配置（特征码搜索）
 SO_PATCH_ORIGINAL = bytes([0x4A, 0xAC, 0x8E])
 SO_PATCH_NEW = bytes([0x0A, 0x00, 0x80])
 
@@ -45,7 +42,6 @@ UNSUPPORTED_APP_CLASSES = ["HwApplication", "HuaweiApplication"]
 UNSUPPORTED_PACKAGE_KEYWORDS = ["huawei"]
 
 def run_cmd(cmd):
-    # 替换命令中的 "java" 为内嵌 java.exe 的完整路径
     if java_exe != "java":
         cmd = cmd.replace("java ", f'"{java_exe}" ')
         cmd = cmd.replace("java\"", f'"{java_exe}"')
@@ -55,8 +51,8 @@ def run_cmd(cmd):
 def get_adb_devices():
     common_ports = ["16416", "7555", "5555"]
     for port in common_ports:
-        subprocess.run(f"adb connect 127.0.0.1:{port}", shell=True, capture_output=True)
-    result = subprocess.run("adb devices", shell=True, capture_output=True, text=True)
+        subprocess.run(f'"{ADB_EXE}" connect 127.0.0.1:{port}', shell=True, capture_output=True)
+    result = subprocess.run(f'"{ADB_EXE}" devices', shell=True, capture_output=True, text=True)
     devices = []
     for line in result.stdout.splitlines():
         if "device" in line and "List" not in line:
@@ -65,7 +61,7 @@ def get_adb_devices():
     return devices
 
 def find_game_on_device(device_serial):
-    cmd = f"adb -s {device_serial} shell pm list packages | findstr pvz2"
+    cmd = f'"{ADB_EXE}" -s {device_serial} shell pm list packages'
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     packages = []
     for line in result.stdout.splitlines():
@@ -74,8 +70,8 @@ def find_game_on_device(device_serial):
             packages.append(pkg)
     return packages
 
-def pull_apk_from_device(device_serial, package_name, local_name=LOCAL_APK):
-    cmd = f"adb -s {device_serial} shell pm path {package_name}"
+def pull_apk_from_device(device_serial, package_name, local_name):
+    cmd = f'"{ADB_EXE}" -s {device_serial} shell pm path {package_name}'
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     apk_path = None
     for line in result.stdout.splitlines():
@@ -83,9 +79,9 @@ def pull_apk_from_device(device_serial, package_name, local_name=LOCAL_APK):
             apk_path = line.replace("package:", "").strip()
             break
     if not apk_path:
-        sys.exit(f"❌ 无法获取 {package_name} 的 APK 路径")
+        raise Exception(f"无法获取 {package_name} 的 APK 路径")
     print(f"📥 正在从设备拉取 {package_name} ...")
-    run_cmd(f"adb -s {device_serial} pull {apk_path} {local_name}")
+    run_cmd(f'"{ADB_EXE}" -s {device_serial} pull {apk_path} {local_name}')
     return local_name
 
 def choose_package(packages):
@@ -114,14 +110,14 @@ def get_input_apk():
         packages = find_game_on_device(device)
         if packages:
             pkg = choose_package(packages)
-            return pull_apk_from_device(device, pkg)
+            return pull_apk_from_device(device, pkg, LOCAL_APK)
         else:
             print("⚠️ 未在设备中找到植物大战僵尸2，切换为本地模式...")
     else:
         print("⚠️ 未检测到 adb 设备，切换为本地模式...")
 
-    output_names = ["免绑包.apk", "自动免绑包.apk", "小米免绑包.apk", "4399免绑包.apk", "华为免绑包.apk", UNSIGNED_APK, "output_unsigned-signed.apk"]
-    apks = [f for f in glob.glob("*.apk") if os.path.basename(f) not in output_names]
+    output_names = ["免绑包.apk", "免绑包_", "自动免绑包.apk", "小米免绑包.apk", "4399免绑包.apk", "华为免绑包.apk", UNSIGNED_APK, "output_unsigned-signed.apk"]
+    apks = [f for f in glob.glob("*.apk") if not any(f.startswith(prefix) for prefix in output_names)]
     if len(apks) == 0:
         sys.exit("❌ 当前目录未找到待处理的 APK，且无法从设备获取。")
     elif len(apks) > 1:
@@ -269,6 +265,22 @@ def patch_libsrc():
         f.write(data)
     print(f"[补丁] 已修补 libSrc.so 偏移 {hex(pos)} 处 3 字节")
 
+def modify_package(new_package):
+    """修改 AndroidManifest.xml 中的 package 属性"""
+    manifest_path = os.path.join(UNPACK_DIR, "AndroidManifest.xml")
+    if not os.path.exists(manifest_path):
+        print("[警告] 未找到 AndroidManifest.xml")
+        return
+    tree = ET.parse(manifest_path)
+    root = tree.getroot()
+    old_package = root.attrib.get("package", "")
+    if not old_package:
+        print("[警告] 原始包名为空，无法修改")
+        return
+    root.set("package", new_package)
+    tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
+    print(f"[修改] 包名已从 {old_package} 改为 {new_package}")
+
 def clean_temp_files():
     temp_items = [UNPACK_DIR, UNSIGNED_APK]
     for item in temp_items:
@@ -283,10 +295,13 @@ def clean_temp_files():
             except Exception as e:
                 print(f"[警告] 清理 {item} 失败: {e}")
 
-# ================== GUI 调用的核心函数 ==================
-def process_apk(apk_path):
-    """供外部调用的处理函数，返回生成的免绑包路径"""
-    global java_exe   # 确保使用模块级别的 java_exe
+def process_apk(apk_path, output_dir=None, custom_name=None, new_package=None):
+    """处理单个 APK，返回生成的免绑包路径。
+    output_dir: 输出目录，默认为当前工作目录
+    custom_name: 自定义输出文件名（不含.apk），为 None 时使用默认命名
+    new_package: 自定义内部包名，为 None 时不修改
+    """
+    global java_exe
     import tempfile
     original_dir = os.getcwd()
     tmp_dir = tempfile.mkdtemp()
@@ -299,6 +314,10 @@ def process_apk(apk_path):
         if os.path.exists(UNPACK_DIR):
             shutil.rmtree(UNPACK_DIR)
         run_cmd(f'java -jar "{APKTOOL}" d -f "{input_apk}" -o "{UNPACK_DIR}"')
+
+        # 修改包名（可选）
+        if new_package:
+            modify_package(new_package)
 
         package, app_class = get_app_class()
         if not app_class:
@@ -318,7 +337,12 @@ def process_apk(apk_path):
             os.remove(UNSIGNED_APK)
         run_cmd(f'java -jar "{APKTOOL}" b "{UNPACK_DIR}" -o "{UNSIGNED_APK}"')
 
-        signed_apk = "免绑包.apk"
+        # 使用自定义名称或默认命名
+        if custom_name:
+            signed_apk = f"{custom_name}.apk"
+        else:
+            signed_apk = f"免绑包_{package}.apk"
+
         if os.path.exists(signed_apk):
             os.remove(signed_apk)
         run_cmd(
@@ -329,7 +353,8 @@ def process_apk(apk_path):
 
         clean_temp_files()
 
-        result_path = os.path.join(original_dir, signed_apk)
+        dest_dir = output_dir if output_dir else original_dir
+        result_path = os.path.join(dest_dir, signed_apk)
         if os.path.exists(result_path):
             os.remove(result_path)
         shutil.move(os.path.join(tmp_dir, signed_apk), result_path)
@@ -339,7 +364,6 @@ def process_apk(apk_path):
         os.chdir(original_dir)
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-# ================== 命令行入口 ==================
 def main():
     input_apk = get_input_apk()
     process_apk(input_apk)

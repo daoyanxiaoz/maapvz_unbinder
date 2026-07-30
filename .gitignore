@@ -10,3 +10,7 @@ output_unsigned.apk
 *.idsig
 .vscode/
 .idea/
+# ADB 工具（开发环境需要，但不提交到仓库）
+adb.exe
+AdbWinApi.dll
+AdbWinUsbApi.dll
