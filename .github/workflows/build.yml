@@ -90,6 +90,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller customtkinter tkinterdnd2
 
+      - name: Download ADB (platform-tools)
+        run: |
+          curl -L -o platform-tools.zip https://dl.google.com/android/repository/platform-tools-latest-windows.zip
+          7z x platform-tools.zip -oadb_tools
+          move adb_tools\platform-tools\adb.exe .
+          move adb_tools\platform-tools\AdbWinApi.dll .
+          move adb_tools\platform-tools\AdbWinUsbApi.dll .
+          rm platform-tools.zip
+          rmdir /s /q adb_tools
+
       - name: Build executable
         run: |
           pyinstaller --onefile --console `

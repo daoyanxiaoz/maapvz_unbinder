@@ -115,8 +115,8 @@ class BatchWindow(ctk.CTkToplevel if USE_CTK else tk.Toplevel):
         option_frame = ctk.CTkFrame(main_frame) if USE_CTK else tk.Frame(main_frame)
         option_frame.pack(fill="x", pady=5)
 
-        # 自定义包名（内部包名）
-        label_cls(option_frame, text="自定义包名（可选）：", font=("Microsoft YaHei", 10)).pack(side="left")
+        # 新包名（内部包名）
+        label_cls(option_frame, text="新包名（可选）：", font=("Microsoft YaHei", 10)).pack(side="left")
         self.new_package_entry = ctk.CTkEntry(option_frame, width=200, placeholder_text="如 com.example.pvz2") if USE_CTK else tk.Entry(option_frame, width=25)
         self.new_package_entry.pack(side="left", padx=5)
         label_cls(option_frame, text="※仅对单个选中项有效", font=("Microsoft YaHei", 8)).pack(side="left")
@@ -300,7 +300,7 @@ class BatchWindow(ctk.CTkToplevel if USE_CTK else tk.Toplevel):
 
         selected = [all_items[i] for i in selected_indices if i < len(all_items)]
 
-        # 自定义包名仅对单个选中项有效
+        # 新包名仅对单个选中项有效
         new_package = None
         if len(selected) == 1:
             new_package = self.new_package_entry.get().strip() or None
@@ -438,8 +438,8 @@ class App:
 
         label_cls = ctk.CTkLabel if USE_CTK else tk.Label
 
-        # 自定义包名
-        label_cls(option_frame, text="自定义包名（可选）：", font=("Microsoft YaHei", 10)).pack(side="left")
+        # 新包名
+        label_cls(option_frame, text="新包名（可选）：", font=("Microsoft YaHei", 10)).pack(side="left")
         self.new_package_entry = ctk.CTkEntry(option_frame, width=180, placeholder_text="修改内部包名") if USE_CTK else tk.Entry(option_frame, width=22)
         self.new_package_entry.pack(side="left", padx=5)
 

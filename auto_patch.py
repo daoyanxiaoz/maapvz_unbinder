@@ -235,6 +235,15 @@ def lower_target_sdk():
     with open(manifest_path, "r", encoding="utf-8") as f:
         content = f.read()
 
+    # 确保 <manifest> 标签有 xmlns:android 声明（避免前缀未绑定错误）
+    if 'xmlns:android="http://schemas.android.com/apk/res/android"' not in content.splitlines()[0]:
+        content = re.sub(
+            r'(<manifest\b)',
+            r'\1 xmlns:android="http://schemas.android.com/apk/res/android"',
+            content,
+            count=1
+        )
+
     if '<uses-sdk ' in content:
         content = re.sub(r'targetSdkVersion="[^"]*"', 'targetSdkVersion="29"', content)
     else:
@@ -246,6 +255,25 @@ def lower_target_sdk():
     with open(manifest_path, "w", encoding="utf-8") as f:
         f.write(content)
     print("[修改] targetSdkVersion 已强制设为 29")
+
+def modify_package(new_package):
+    """修改 AndroidManifest.xml 中的 package 属性（文本替换，避免破坏命名空间）"""
+    manifest_path = os.path.join(UNPACK_DIR, "AndroidManifest.xml")
+    if not os.path.exists(manifest_path):
+        print("[警告] 未找到 AndroidManifest.xml")
+        return
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    old_package_match = re.search(r'package="([^"]*)"', content)
+    if not old_package_match:
+        print("[警告] 未找到 package 属性，无法修改")
+        return
+    old_package = old_package_match.group(1)
+    content = content.replace(f'package="{old_package}"', f'package="{new_package}"')
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"[修改] 包名已从 {old_package} 改为 {new_package}")
 
 def patch_libsrc():
     so_path = os.path.join(UNPACK_DIR, "lib", "arm64-v8a", "libSrc.so")
@@ -264,22 +292,6 @@ def patch_libsrc():
     with open(so_path, "wb") as f:
         f.write(data)
     print(f"[补丁] 已修补 libSrc.so 偏移 {hex(pos)} 处 3 字节")
-
-def modify_package(new_package):
-    """修改 AndroidManifest.xml 中的 package 属性"""
-    manifest_path = os.path.join(UNPACK_DIR, "AndroidManifest.xml")
-    if not os.path.exists(manifest_path):
-        print("[警告] 未找到 AndroidManifest.xml")
-        return
-    tree = ET.parse(manifest_path)
-    root = tree.getroot()
-    old_package = root.attrib.get("package", "")
-    if not old_package:
-        print("[警告] 原始包名为空，无法修改")
-        return
-    root.set("package", new_package)
-    tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
-    print(f"[修改] 包名已从 {old_package} 改为 {new_package}")
 
 def clean_temp_files():
     temp_items = [UNPACK_DIR, UNSIGNED_APK]
