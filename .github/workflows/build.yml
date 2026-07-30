@@ -22,8 +22,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - id: set_tag
-        shell: bash
+      - name: Determine tag and release status
+        id: set_tag
         run: |
           is_release=false
           tag=""
@@ -77,9 +77,6 @@ jobs:
   build:
     needs: meta
     runs-on: windows-latest
-    strategy:
-      matrix:
-        arch: [x86_64]
     steps:
       - uses: actions/checkout@v4
 
@@ -88,33 +85,31 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install PyInstaller and GUI dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller customtkinter tkinterdnd2
 
-      - name: Build executable (console version for debugging)
-  shell: pwsh
-  run: |
-    pyinstaller --onefile --console `
-      --add-data "apktool.jar;." `
-      --add-data "apksigner.jar;." `
-      --add-data "mykey.keystore;." `
-      --add-data "patch_files;patch_files" `
-      --add-data "jre;jre" `
-      --add-data "auto_patch.py;." `
-      --add-data "使用方法.txt;." `
-      --add-data "adb.exe;." `
-      --add-data "AdbWinApi.dll;." `
-      --add-data "AdbWinUsbApi.dll;." `
-      --collect-all customtkinter `
-      --collect-all tkinterdnd2 `
-      --hidden-import auto_patch `
-      --hidden-import tkinter `
-      --hidden-import tkinter.ttk `
-      --hidden-import customtkinter `
-      --name "maapvz_免绑小助手" `
-      gui.py
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --console `
+            --add-data "apktool.jar;." `
+            --add-data "apksigner.jar;." `
+            --add-data "mykey.keystore;." `
+            --add-data "patch_files;patch_files" `
+            --add-data "jre;jre" `
+            --add-data "auto_patch.py;." `
+            --add-data "使用方法.txt;." `
+            --add-data "adb.exe;." `
+            --add-data "AdbWinApi.dll;." `
+            --add-data "AdbWinUsbApi.dll;." `
+            --collect-all customtkinter `
+            --collect-all tkinterdnd2 `
+            --hidden-import auto_patch `
+            --hidden-import tkinter `
+            --hidden-import tkinter.ttk `
+            --name "${{ env.EXE_NAME }}" `
+            gui.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
